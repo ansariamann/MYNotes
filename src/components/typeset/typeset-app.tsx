@@ -73,26 +73,28 @@ export function TypeSetApp() {
       try {
         const parsedNotes = JSON.parse(savedNotes);
         setNotes(parsedNotes);
-        if (parsedNotes.length > 0) {
+        if (parsedNotes.length > 0 && !activeNoteId) { // Only set if no active note yet
             setActiveNoteId(parsedNotes[0].id);
         }
       } catch (error) {
         console.error("Failed to parse notes from localStorage", error);
         setNotes(initialNotes);
-        if (initialNotes.length > 0) {
+        if (initialNotes.length > 0 && !activeNoteId) {
             setActiveNoteId(initialNotes[0].id);
         }
       }
     } else {
       setNotes(initialNotes);
-       if (initialNotes.length > 0) {
+       if (initialNotes.length > 0 && !activeNoteId) {
             setActiveNoteId(initialNotes[0].id);
         }
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
 
   useEffect(() => {
-    if (notes.length > 0 || localStorage.getItem("typeset-notes")) {
+    // Avoid saving empty notes array on initial load if localStorage was empty
+    if (notes.length > 0 || localStorage.getItem("typeset-notes") !== null) {
         localStorage.setItem("typeset-notes", JSON.stringify(notes));
     }
   }, [notes]);
@@ -106,10 +108,14 @@ export function TypeSetApp() {
       setCurrentEditorTitle(activeNote.title);
       setCurrentEditorContent(activeNote.content);
     } else {
-      setCurrentEditorTitle("");
-      setCurrentEditorContent("");
+      // Only clear if there's truly no active note, not just during a switch
+      if (activeNoteId === null) {
+        setCurrentEditorTitle("");
+        setCurrentEditorContent("");
+      }
     }
-  }, [activeNote]);
+  }, [activeNote, activeNoteId]);
+  
 
   const stableHandleSaveNote = useCallback(() => {
     if (!activeNoteId) return;
@@ -121,21 +127,21 @@ export function TypeSetApp() {
       const noteInStorage = prevNotes.find(n => n.id === activeNoteId);
       // Only update and toast if there's an actual change
       if (noteInStorage && (noteInStorage.title !== titleToSave || noteInStorage.content !== contentToSave)) {
-         toast({ title: "Note Saved!", description: `"${titleToSave || 'Untitled Note'}" has been updated.` });
+        // toast({ title: "Note Saved!", description: `"${titleToSave || 'Untitled Note'}" has been updated.` });
         return prevNotes.map(note =>
           note.id === activeNoteId
             ? { ...note, title: titleToSave, content: contentToSave, updatedAt: new Date().toISOString() }
             : note
         );
       }
-      return prevNotes; // No change, return previous state
+      return prevNotes; 
     });
-  }, [activeNoteId, toast]);
+  }, [activeNoteId]);
 
 
   useEffect(() => {
     const handleBlur = () => {
-      if (document.hasFocus()) return; // Only save if window truly lost focus
+      // if (document.hasFocus()) return; 
       if (activeNoteId) {
         stableHandleSaveNote();
       }
@@ -153,7 +159,7 @@ export function TypeSetApp() {
     return () => {
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-       if (activeNoteId) { // Save on component unmount as a fallback
+       if (activeNoteId) { 
           stableHandleSaveNote();
       }
     };
@@ -175,6 +181,8 @@ export function TypeSetApp() {
     };
     setNotes(prevNotes => [newNote, ...prevNotes]);
     setActiveNoteId(newNote.id); 
+    // setCurrentEditorTitle("Untitled Note"); // Set directly for new note
+    // setCurrentEditorContent("");
     toast({ title: "New Note Created", description: "Switched to your new untitled note." });
   }, [activeNoteId, stableHandleSaveNote, toast]);
 
@@ -273,6 +281,19 @@ export function TypeSetApp() {
     }
   };
 
+  const handleTitleFocus = () => {
+    if (currentEditorTitle === "Untitled Note") {
+      setCurrentEditorTitle("");
+    }
+  };
+
+  const handleTitleBlur = () => {
+    if (currentEditorTitle.trim() === "") {
+      setCurrentEditorTitle("Untitled Note");
+    }
+    stableHandleSaveNote(); // Save on blur of title
+  };
+
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -314,6 +335,8 @@ export function TypeSetApp() {
                     placeholder="Note Title"
                     value={currentEditorTitle}
                     onChange={(e) => setCurrentEditorTitle(e.target.value)}
+                    onFocus={handleTitleFocus}
+                    onBlur={handleTitleBlur}
                     className="text-3xl md:text-4xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0 mb-6 h-auto"
                     aria-label="Note Title"
                   />
@@ -329,6 +352,7 @@ export function TypeSetApp() {
                     onKeyUp={handleTextSelectionForAI} 
                     className="w-full min-h-[400px] text-base md:text-lg leading-relaxed resize-none border-none shadow-none focus-visible:ring-0 p-0"
                     aria-label="Note Content"
+                    style={currentStyles} 
                   />
                 </div>
               </ScrollArea>
@@ -351,4 +375,4 @@ export function TypeSetApp() {
     </SidebarProvider>
   );
 }
-
+    
