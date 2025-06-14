@@ -73,7 +73,7 @@ export function TypeSetApp() {
       try {
         const parsedNotes = JSON.parse(savedNotes);
         setNotes(parsedNotes);
-        if (parsedNotes.length > 0 && !activeNoteId) { // Only set if no active note yet
+        if (parsedNotes.length > 0 && !activeNoteId) { 
             setActiveNoteId(parsedNotes[0].id);
         }
       } catch (error) {
@@ -90,10 +90,9 @@ export function TypeSetApp() {
         }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only once on mount
+  }, []); 
 
   useEffect(() => {
-    // Avoid saving empty notes array on initial load if localStorage was empty
     if (notes.length > 0 || localStorage.getItem("typeset-notes") !== null) {
         localStorage.setItem("typeset-notes", JSON.stringify(notes));
     }
@@ -108,7 +107,6 @@ export function TypeSetApp() {
       setCurrentEditorTitle(activeNote.title);
       setCurrentEditorContent(activeNote.content);
     } else {
-      // Only clear if there's truly no active note, not just during a switch
       if (activeNoteId === null) {
         setCurrentEditorTitle("");
         setCurrentEditorContent("");
@@ -125,9 +123,7 @@ export function TypeSetApp() {
     
     setNotes(prevNotes => {
       const noteInStorage = prevNotes.find(n => n.id === activeNoteId);
-      // Only update and toast if there's an actual change
       if (noteInStorage && (noteInStorage.title !== titleToSave || noteInStorage.content !== contentToSave)) {
-        // toast({ title: "Note Saved!", description: `"${titleToSave || 'Untitled Note'}" has been updated.` });
         return prevNotes.map(note =>
           note.id === activeNoteId
             ? { ...note, title: titleToSave, content: contentToSave, updatedAt: new Date().toISOString() }
@@ -141,7 +137,6 @@ export function TypeSetApp() {
 
   useEffect(() => {
     const handleBlur = () => {
-      // if (document.hasFocus()) return; 
       if (activeNoteId) {
         stableHandleSaveNote();
       }
@@ -173,7 +168,7 @@ export function TypeSetApp() {
 
     const newNote: Note = {
       id: uuidv4(),
-      title: "Untitled Note",
+      title: "", // New notes start with a blank title
       content: "",
       tags: [],
       createdAt: new Date().toISOString(),
@@ -181,9 +176,7 @@ export function TypeSetApp() {
     };
     setNotes(prevNotes => [newNote, ...prevNotes]);
     setActiveNoteId(newNote.id); 
-    // setCurrentEditorTitle("Untitled Note"); // Set directly for new note
-    // setCurrentEditorContent("");
-    toast({ title: "New Note Created", description: "Switched to your new untitled note." });
+    toast({ title: "New Note Created", description: "Switched to your new note." });
   }, [activeNoteId, stableHandleSaveNote, toast]);
 
   const handleSelectNote = useCallback((id: string) => {
@@ -281,16 +274,7 @@ export function TypeSetApp() {
     }
   };
 
-  const handleTitleFocus = () => {
-    if (currentEditorTitle === "Untitled Note") {
-      setCurrentEditorTitle("");
-    }
-  };
-
   const handleTitleBlur = () => {
-    if (currentEditorTitle.trim() === "") {
-      setCurrentEditorTitle("Untitled Note");
-    }
     stableHandleSaveNote(); // Save on blur of title
   };
 
@@ -335,7 +319,6 @@ export function TypeSetApp() {
                     placeholder="Note Title"
                     value={currentEditorTitle}
                     onChange={(e) => setCurrentEditorTitle(e.target.value)}
-                    onFocus={handleTitleFocus}
                     onBlur={handleTitleBlur}
                     className="text-3xl md:text-4xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0 mb-6 h-auto"
                     aria-label="Note Title"
