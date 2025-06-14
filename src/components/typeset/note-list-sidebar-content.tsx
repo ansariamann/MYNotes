@@ -39,6 +39,13 @@ export const NoteListSidebarContent = React.memo(function NoteListSidebarContent
     );
   }, [notes, searchTerm]);
 
+  const handleNoteKeyPress = (event: React.KeyboardEvent, noteId: string) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onSelectNote(noteId);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 space-y-4">
@@ -74,30 +81,38 @@ export const NoteListSidebarContent = React.memo(function NoteListSidebarContent
                 "w-full justify-start h-auto py-2 px-3 text-left flex flex-col items-start group",
                 activeNoteId === note.id && "bg-primary/10 text-primary"
               )}
-              onClick={() => onSelectNote(note.id)}
+              asChild // This makes the Button a Slot, passing props to the child div
             >
-              <div className="flex justify-between w-full items-center">
-                <span className="font-medium truncate flex-grow pr-2">{note.title || "Untitled Note"}</span>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-destructive hover:bg-destructive/10"
-                  onClick={(e) => { e.stopPropagation(); onDeleteNote(note.id); }}
-                  aria-label={`Delete note ${note.title || "Untitled Note"}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground truncate w-full mt-0.5">
-                {note.content ? (note.content.substring(0, 50) + (note.content.length > 50 ? "..." : "")) : "Empty note"}
-              </p>
-              {note.tags && note.tags.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {note.tags.slice(0,3).map(tag => (
-                    <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                  ))}
+              <div
+                onClick={() => onSelectNote(note.id)}
+                onKeyDown={(e) => handleNoteKeyPress(e, note.id)}
+                role="button"
+                tabIndex={0}
+                // The className from Button will be merged here.
+              >
+                <div className="flex justify-between w-full items-center">
+                  <span className="font-medium truncate flex-grow pr-2">{note.title || "Untitled Note"}</span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-destructive hover:bg-destructive/10"
+                    onClick={(e) => { e.stopPropagation(); onDeleteNote(note.id); }}
+                    aria-label={`Delete note ${note.title || "Untitled Note"}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
+                <p className="text-xs text-muted-foreground truncate w-full mt-0.5">
+                  {note.content ? (note.content.substring(0, 50) + (note.content.length > 50 ? "..." : "")) : "Empty note"}
+                </p>
+                {note.tags && note.tags.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {note.tags.slice(0,3).map(tag => (
+                      <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
             </Button>
           ))}
         </div>
