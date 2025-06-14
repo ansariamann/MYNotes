@@ -3,7 +3,7 @@
 
 import React, { useMemo } from "react";
 import type { Note } from "@/types";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button"; // Imported buttonVariants
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { FilePlus2, Search, Tag, Folder, Trash2 } from "lucide-react";
@@ -74,46 +74,41 @@ export const NoteListSidebarContent = React.memo(function NoteListSidebarContent
             <p className="text-sm text-muted-foreground p-2 text-center">No notes yet. Create one!</p>
           )}
           {filteredNotes.map((note) => (
-            <Button
+            <div
               key={note.id}
-              variant="ghost"
               className={cn(
+                buttonVariants({ variant: "ghost" }),
                 "w-full justify-start h-auto py-2 px-3 text-left flex flex-col items-start group",
                 activeNoteId === note.id && "bg-primary/10 text-primary"
               )}
-              asChild // This makes the Button a Slot, passing props to the child div
+              onClick={() => onSelectNote(note.id)}
+              onKeyDown={(e) => handleNoteKeyPress(e, note.id)}
+              role="button"
+              tabIndex={0}
             >
-              <div
-                onClick={() => onSelectNote(note.id)}
-                onKeyDown={(e) => handleNoteKeyPress(e, note.id)}
-                role="button"
-                tabIndex={0}
-                // The className from Button will be merged here.
-              >
-                <div className="flex justify-between w-full items-center">
-                  <span className="font-medium truncate flex-grow pr-2">{note.title || "Untitled Note"}</span>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-destructive hover:bg-destructive/10"
-                    onClick={(e) => { e.stopPropagation(); onDeleteNote(note.id); }}
-                    aria-label={`Delete note ${note.title || "Untitled Note"}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground truncate w-full mt-0.5">
-                  {note.content ? (note.content.substring(0, 50) + (note.content.length > 50 ? "..." : "")) : "Empty note"}
-                </p>
-                {note.tags && note.tags.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {note.tags.slice(0,3).map(tag => (
-                      <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                    ))}
-                  </div>
-                )}
+              <div className="flex justify-between w-full items-center">
+                <span className="font-medium truncate flex-grow pr-2">{note.title || "Untitled Note"}</span>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-destructive hover:bg-destructive/10"
+                  onClick={(e) => { e.stopPropagation(); onDeleteNote(note.id); }}
+                  aria-label={`Delete note ${note.title || "Untitled Note"}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
-            </Button>
+              <p className="text-xs text-muted-foreground truncate w-full mt-0.5">
+                {note.content ? (note.content.substring(0, 50) + (note.content.length > 50 ? "..." : "")) : "Empty note"}
+              </p>
+              {note.tags && note.tags.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {note.tags.slice(0,3).map(tag => (
+                    <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </ScrollArea>
