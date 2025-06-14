@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Note, StyleValue } from "@/types";
 import { AppHeader } from "./app-header";
 import { NoteListSidebarContent } from "./note-list-sidebar-content";
@@ -45,14 +45,13 @@ export function TypeSetApp() {
     fontFamily: "PT Sans, sans-serif",
     fontSize: "16px",
     fontWeight: "400",
-    color: "#000000", // This is a default, actual color application would be more complex
+    color: "#000000",
   });
   const [isAISuggestionsPanelOpen, setIsAISuggestionsPanelOpen] = useState(false);
   const [selectedTextForAI, setSelectedTextForAI] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
   const { toast } = useToast();
-  const debouncedSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const savedNotes = localStorage.getItem("typeset-notes");
@@ -60,9 +59,6 @@ export function TypeSetApp() {
       try {
         const parsedNotes = JSON.parse(savedNotes);
         setNotes(parsedNotes);
-        if (parsedNotes.length > 0 && !activeNoteId) {
-           // setActiveNoteId(parsedNotes[0].id); // Optionally activate the first note
-        }
       } catch (error) {
         console.error("Failed to parse notes from localStorage", error);
         setNotes(initialNotes);
@@ -70,23 +66,10 @@ export function TypeSetApp() {
     } else {
       setNotes(initialNotes);
     }
-  }, []); // Removed activeNoteId from dependencies to prevent re-triggering
+  }, []);
 
   useEffect(() => {
-    if (notes.length > 0) {
-        if (debouncedSaveTimeoutRef.current) {
-            clearTimeout(debouncedSaveTimeoutRef.current);
-        }
-        debouncedSaveTimeoutRef.current = setTimeout(() => {
-            localStorage.setItem("typeset-notes", JSON.stringify(notes));
-        }, 1500); // Debounce for 1.5 seconds
-    }
-
-    return () => {
-        if (debouncedSaveTimeoutRef.current) {
-            clearTimeout(debouncedSaveTimeoutRef.current);
-        }
-    };
+    localStorage.setItem("typeset-notes", JSON.stringify(notes));
   }, [notes]);
 
   const activeNote = useMemo(() => {
@@ -98,11 +81,10 @@ export function TypeSetApp() {
       setCurrentEditorTitle(activeNote.title);
       setCurrentEditorContent(activeNote.content);
     } else {
-      // If no active note (e.g., all notes deleted), clear editor fields
       setCurrentEditorTitle("");
       setCurrentEditorContent("");
     }
-  }, [activeNote]); // Depend only on activeNote memoized value
+  }, [activeNote]);
 
   const handleSaveNote = useCallback(() => {
     if (!activeNoteId) return;
@@ -113,24 +95,32 @@ export function TypeSetApp() {
           : note
       )
     );
-    // Only toast if there was actually an active note being saved
-    if (activeNoteId) {
+    if (activeNoteId) { // Ensure toast only shows if a note was actually saved
         toast({ title: "Note Saved!", description: `"${currentEditorTitle || 'Untitled Note'}" has been updated.`});
     }
   }, [activeNoteId, currentEditorTitle, currentEditorContent, toast]);
   
-  // Auto-save feature
   useEffect(() => {
-    if (!activeNoteId || !activeNote) return; // Ensure activeNote is also available
-
-    const handler = setTimeout(() => {
-      if (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content) {
+    const handleBlur = () => {
+      if (activeNote && (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content)) {
         handleSaveNote();
       }
-    }, 1000); 
+    };
 
-    return () => clearTimeout(handler);
-  }, [currentEditorTitle, currentEditorContent, activeNoteId, activeNote, handleSaveNote]);
+    const handleBeforeUnload = () => {
+      if (activeNote && (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content)) {
+        handleSaveNote();
+      }
+    };
+
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [activeNote, currentEditorTitle, currentEditorContent, handleSaveNote]);
 
 
   const handleCreateNewNote = useCallback(() => {
@@ -160,8 +150,8 @@ export function TypeSetApp() {
     setNotes(prevNotes => prevNotes.filter(note => note.id !== id));
     
     if (activeNoteId === id) {
-      const remainingNotes = notes.filter(n => n.id !== id);
-      setActiveNoteId(remainingNotes.length > 0 ? remainingNotes[0].id : null);
+      const remainingNotes = notes.filter(n => n.id !== id); // notes here refers to the state before deletion
+      setActiveNoteId(remainingNotes.length > 0 ? (remainingNotes.find(n => n.id !==id) || remainingNotes[0]).id : null);
     }
     if (noteToDelete) {
       toast({ title: "Note Deleted", description: `"${noteToDelete.title || 'Untitled Note'}" has been removed.`, variant: "destructive" });
@@ -204,8 +194,6 @@ export function TypeSetApp() {
      if (selectedTextForAI === currentEditorContent) {
         setCurrentEditorContent(suggestedText);
      } else {
-        // If specific text was selected, it's harder to replace without a proper editor.
-        // Appending is a safe fallback for this conceptual implementation.
         setCurrentEditorContent(prev => `${prev}\n\nAI Suggested Text:\n${suggestedText}`);
      }
      toast({ title: "AI Text Suggestion Applied", description: "The suggested text has been added to your note."});
@@ -233,7 +221,7 @@ export function TypeSetApp() {
             />
           </Sidebar>
           <SidebarInset className="flex flex-col overflow-hidden">
-            {activeNoteId && ( // Only show toolbar if a note is active
+            {activeNoteId && (
               <StylingToolbar
                 onStyleChange={handleStyleChange}
                 onFormatAction={handleFormatAction}
@@ -262,5 +250,3 @@ export function TypeSetApp() {
     </SidebarProvider>
   );
 }
-
-    
