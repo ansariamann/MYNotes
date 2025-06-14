@@ -55,7 +55,8 @@ export const StylingToolbar = React.memo(function StylingToolbar({
   currentStyles,
 }: StylingToolbarProps) {
   return (
-    <div className="p-3 border-b bg-card shadow-sm sticky top-16 z-10"> {/* Adjusted top if header is h-16 */}
+    // Removed sticky positioning from here, parent will control it
+    <div className="p-3"> 
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="icon" onClick={() => onFormatAction("undo")} title="Undo"><Undo /></Button>
         <Button variant="outline" size="icon" onClick={() => onFormatAction("redo")} title="Redo"><Redo /></Button>
@@ -161,5 +162,3 @@ export const StylingToolbar = React.memo(function StylingToolbar({
     </div>
   );
 });
-
-    

@@ -6,12 +6,14 @@ import type { Note, StyleValue } from "@/types";
 import { AppHeader } from "./app-header";
 import { NoteListSidebarContent } from "./note-list-sidebar-content";
 import { StylingToolbar } from "./styling-toolbar";
-import { NoteEditor } from "./note-editor";
 import { AISuggestionsPanel } from "./ai-suggestions-panel";
 import { Sidebar, SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from "uuid"; // For generating unique IDs
 import type { SuggestStylesOutput } from "@/ai/flows/suggest-styles";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 
 const initialNotes: Note[] = [
@@ -53,9 +55,9 @@ export function TypeSetApp() {
 
   const { toast } = useToast();
 
-  // Refs for current editor values to be used in stable callbacks
   const currentEditorTitleRef = useRef(currentEditorTitle);
   const currentEditorContentRef = useRef(currentEditorContent);
+  const contentTextAreaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     currentEditorTitleRef.current = currentEditorTitle;
@@ -90,7 +92,7 @@ export function TypeSetApp() {
   }, []);
 
   useEffect(() => {
-    if (notes.length > 0 || localStorage.getItem("typeset-notes")) { // Avoid saving empty initial notes unless it was already there
+    if (notes.length > 0 || localStorage.getItem("typeset-notes")) {
         localStorage.setItem("typeset-notes", JSON.stringify(notes));
     }
   }, [notes]);
@@ -114,24 +116,26 @@ export function TypeSetApp() {
 
     const titleToSave = currentEditorTitleRef.current;
     const contentToSave = currentEditorContentRef.current;
-
+    
     setNotes(prevNotes => {
       const noteInStorage = prevNotes.find(n => n.id === activeNoteId);
+      // Only update and toast if there's an actual change
       if (noteInStorage && (noteInStorage.title !== titleToSave || noteInStorage.content !== contentToSave)) {
-        toast({ title: "Note Saved!", description: `"${titleToSave || 'Untitled Note'}" has been updated.` });
+         toast({ title: "Note Saved!", description: `"${titleToSave || 'Untitled Note'}" has been updated.` });
         return prevNotes.map(note =>
           note.id === activeNoteId
             ? { ...note, title: titleToSave, content: contentToSave, updatedAt: new Date().toISOString() }
             : note
         );
       }
-      return prevNotes; 
+      return prevNotes; // No change, return previous state
     });
   }, [activeNoteId, toast]);
 
 
   useEffect(() => {
     const handleBlur = () => {
+      if (document.hasFocus()) return; // Only save if window truly lost focus
       if (activeNoteId) {
         stableHandleSaveNote();
       }
@@ -141,12 +145,6 @@ export function TypeSetApp() {
       if (activeNoteId) {
         stableHandleSaveNote();
       }
-      // Optionally, to prompt the user if there are unsaved changes (browser support varies for event.returnValue):
-      // const noteInStorage = notes.find(n => n.id === activeNoteId);
-      // if (noteInStorage && (noteInStorage.title !== currentEditorTitleRef.current || noteInStorage.content !== currentEditorContentRef.current)) {
-      //   event.preventDefault(); // For some older browsers
-      //   event.returnValue = ''; // Standard
-      // }
     };
 
     window.addEventListener('blur', handleBlur);
@@ -155,13 +153,7 @@ export function TypeSetApp() {
     return () => {
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [activeNoteId, stableHandleSaveNote]);
-
-  // Effect for saving on actual component unmount
-  useEffect(() => {
-    return () => {
-      if (activeNoteId) {
+       if (activeNoteId) { // Save on component unmount as a fallback
           stableHandleSaveNote();
       }
     };
@@ -262,6 +254,26 @@ export function TypeSetApp() {
     toast({ title: `Exporting as ${format.toUpperCase()}... (Conceptual)`, description: "This feature would generate a file."});
   }, [toast]);
 
+  useEffect(() => {
+    if (contentTextAreaRef.current) {
+      contentTextAreaRef.current.style.height = 'auto';
+      contentTextAreaRef.current.style.height = `${contentTextAreaRef.current.scrollHeight}px`;
+    }
+  }, [currentEditorContent]);
+
+  const handleTextSelectionForAI = () => {
+    if (contentTextAreaRef.current) {
+      const selected = contentTextAreaRef.current.value.substring(
+        contentTextAreaRef.current.selectionStart,
+        contentTextAreaRef.current.selectionEnd
+      );
+      if (selected) {
+        setSelectedTextForAI(selected);
+      }
+    }
+  };
+
+
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="flex flex-col min-h-screen">
@@ -279,23 +291,52 @@ export function TypeSetApp() {
             />
           </Sidebar>
           <SidebarInset className="flex flex-col overflow-hidden">
+            <div className="sticky top-0 z-30 flex h-16 items-center justify-center border-b bg-background px-4 md:px-6 shadow-sm">
+              <h1 className="text-2xl font-headline font-semibold text-primary">MyNotes</h1>
+            </div>
+
             {activeNoteId && (
-              <StylingToolbar
-                onStyleChange={handleStyleChange}
-                onFormatAction={handleFormatAction}
-                onTriggerAISuggestions={handleTriggerAISuggestions}
-                onExport={handleExport}
-                currentStyles={currentStyles}
-              />
+              <div className="sticky top-16 z-20 border-b bg-card shadow-sm">
+                <StylingToolbar
+                  onStyleChange={handleStyleChange}
+                  onFormatAction={handleFormatAction}
+                  onTriggerAISuggestions={handleTriggerAISuggestions}
+                  onExport={handleExport}
+                  currentStyles={currentStyles}
+                />
+              </div>
             )}
-            <NoteEditor
-              isNoteSelected={!!activeNote}
-              titleValue={currentEditorTitle}
-              contentValue={currentEditorContent}
-              onTitleChange={setCurrentEditorTitle}
-              onContentChange={setCurrentEditorContent}
-              onSelectionChange={setSelectedTextForAI}
-            />
+            
+            {activeNote ? (
+              <ScrollArea className="flex-1 bg-background">
+                <div className="p-6 md:p-8 lg:p-12 max-w-3xl mx-auto">
+                  <Input
+                    placeholder="Note Title"
+                    value={currentEditorTitle}
+                    onChange={(e) => setCurrentEditorTitle(e.target.value)}
+                    className="text-3xl md:text-4xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0 mb-6 h-auto"
+                    aria-label="Note Title"
+                  />
+                  <Textarea
+                    ref={contentTextAreaRef}
+                    placeholder="Start writing your note..."
+                    value={currentEditorContent}
+                    onChange={(e) => {
+                      setCurrentEditorContent(e.target.value);
+                    }}
+                    onSelect={handleTextSelectionForAI} 
+                    onMouseUp={handleTextSelectionForAI} 
+                    onKeyUp={handleTextSelectionForAI} 
+                    className="w-full min-h-[400px] text-base md:text-lg leading-relaxed resize-none border-none shadow-none focus-visible:ring-0 p-0"
+                    aria-label="Note Content"
+                  />
+                </div>
+              </ScrollArea>
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-6 bg-muted/30">
+                <p className="text-lg text-muted-foreground">Select a note to edit or create a new one.</p>
+              </div>
+            )}
           </SidebarInset>
         </div>
       </div>
@@ -310,3 +351,4 @@ export function TypeSetApp() {
     </SidebarProvider>
   );
 }
+
