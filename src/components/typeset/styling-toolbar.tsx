@@ -1,5 +1,7 @@
+
 "use client";
 
+import React from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -8,10 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Bold, Italic, Underline, List, Palette, Sparkles, Download, Strikethrough, Pilcrow, ListOrdered, Minus, Redo, Undo
+  Bold, Italic, Underline, List, Palette, Sparkles, Download, Strikethrough, Pilcrow, ListOrdered, Redo, Undo
 } from "lucide-react";
 import type { StyleValue } from "@/types";
 
@@ -46,7 +47,7 @@ const colors = [
   { label: "Purple", value: "#805AD5" },
 ];
 
-export function StylingToolbar({
+export const StylingToolbar = React.memo(function StylingToolbar({
   onStyleChange,
   onFormatAction,
   onTriggerAISuggestions,
@@ -54,9 +55,8 @@ export function StylingToolbar({
   currentStyles,
 }: StylingToolbarProps) {
   return (
-    <div className="p-3 border-b bg-card shadow-sm sticky top-0 z-10">
+    <div className="p-3 border-b bg-card shadow-sm sticky top-16 z-10"> {/* Adjusted top if header is h-16 */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Basic Formatting */}
         <Button variant="outline" size="icon" onClick={() => onFormatAction("undo")} title="Undo"><Undo /></Button>
         <Button variant="outline" size="icon" onClick={() => onFormatAction("redo")} title="Redo"><Redo /></Button>
         <div className="h-6 border-l mx-1"></div>
@@ -66,10 +66,9 @@ export function StylingToolbar({
         <Button variant="outline" size="icon" onClick={() => onFormatAction("strikethrough")} title="Strikethrough"><Strikethrough /></Button>
         
         <div className="h-6 border-l mx-1"></div>
-        {/* Font Family */}
         <Select
           onValueChange={(value) => onStyleChange({ fontFamily: value })}
-          defaultValue={currentStyles.fontFamily}
+          value={currentStyles.fontFamily} 
         >
           <SelectTrigger className="w-[150px] h-9 text-xs">
             <SelectValue placeholder="Font Family" />
@@ -83,10 +82,9 @@ export function StylingToolbar({
           </SelectContent>
         </Select>
 
-        {/* Font Size */}
         <Select
           onValueChange={(value) => onStyleChange({ fontSize: value })}
-          defaultValue={currentStyles.fontSize}
+          value={currentStyles.fontSize}
         >
           <SelectTrigger className="w-[90px] h-9 text-xs">
             <SelectValue placeholder="Size" />
@@ -100,10 +98,9 @@ export function StylingToolbar({
           </SelectContent>
         </Select>
 
-        {/* Font Weight */}
          <Select
           onValueChange={(value) => onStyleChange({ fontWeight: value })}
-          defaultValue={currentStyles.fontWeight}
+          value={currentStyles.fontWeight}
         >
           <SelectTrigger className="w-[110px] h-9 text-xs">
             <SelectValue placeholder="Weight" />
@@ -117,7 +114,6 @@ export function StylingToolbar({
           </SelectContent>
         </Select>
 
-        {/* Color Picker */}
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="icon" title="Text Color">
@@ -141,13 +137,11 @@ export function StylingToolbar({
           </PopoverContent>
         </Popover>
         <div className="h-6 border-l mx-1"></div>
-        {/* Lists & Paragraphs */}
         <Button variant="outline" size="icon" onClick={() => onFormatAction("bulletList")} title="Bullet List"><List /></Button>
         <Button variant="outline" size="icon" onClick={() => onFormatAction("orderedList")} title="Numbered List"><ListOrdered /></Button>
         <Button variant="outline" size="icon" onClick={() => onFormatAction("addParagraph")} title="Add Paragraph"><Pilcrow /></Button>
         
         <div className="h-6 border-l mx-1"></div>
-        {/* AI & Export */}
         <Button variant="outline" onClick={onTriggerAISuggestions} size="sm" className="h-9 text-xs">
           <Sparkles className="mr-2 h-4 w-4 text-accent" /> AI Styles
         </Button>
@@ -166,4 +160,6 @@ export function StylingToolbar({
       </div>
     </div>
   );
-}
+});
+
+    

@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,14 +18,12 @@ interface AISuggestionsPanelProps {
   isOpen: boolean;
   onClose: () => void;
   selectedText: string;
-  noteContext?: string; // e.g., "This is a blog post introduction"
+  noteContext?: string;
   onApplyStyleSuggestion: (suggestion: SuggestStylesOutput) => void;
   onApplyTextSuggestion: (suggestion: string) => void;
 }
 
-type SuggestionType = 'style' | 'text';
-
-export function AISuggestionsPanel({
+export const AISuggestionsPanel = React.memo(function AISuggestionsPanel({
   isOpen,
   onClose,
   selectedText,
@@ -38,25 +37,24 @@ export function AISuggestionsPanel({
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const fetchSuggestions = async () => {
+  const fetchSuggestions = useCallback(async () => {
     if (!selectedText) {
       setError("Please select some text in your note to get suggestions.");
+      setIsLoading(false); // Ensure loading is false if no text
       return;
     }
     setIsLoading(true);
     setError(null);
-    setStyleSuggestions([]);
-    setTextSuggestions([]);
+    setStyleSuggestions([]); // Clear previous suggestions
+    setTextSuggestions([]);   // Clear previous suggestions
 
     try {
-      // Fetch style suggestions (multiple, up to 3 for variety)
       const stylePromises = Array(3).fill(null).map((_, i) => 
-        suggestStylesFlow({ text: selectedText, context: `${noteContext} (suggestion ${i+1})` })
+        suggestStylesFlow({ text: selectedText, context: `${noteContext || 'general context'} (suggestion ${i+1})` })
       );
       const fetchedStyleSuggestions = await Promise.all(stylePromises);
-      setStyleSuggestions(fetchedStyleSuggestions.map((s, i) => ({ ...s, id: `style-${i}` })));
+      setStyleSuggestions(fetchedStyleSuggestions.map((s, i) => ({ ...s, id: `style-${Date.now()}-${i}` }))); // Use more unique ID
 
-      // Fetch text suggestions
       const textSuggOutput = await suggestAlternativeTextFlow({ noteContent: selectedText, context: noteContext });
       setTextSuggestions(textSuggOutput.suggestions.slice(0,3));
 
@@ -71,17 +69,21 @@ export function AISuggestionsPanel({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedText, noteContext, toast]); // Dependencies for useCallback
 
   useEffect(() => {
-    if (isOpen && selectedText) {
-      fetchSuggestions();
-    } else if (isOpen && !selectedText) {
-      setError("Select text in your note to get suggestions.");
-       setStyleSuggestions([]);
-       setTextSuggestions([]);
+    if (isOpen) {
+        if (selectedText) {
+            fetchSuggestions();
+        } else {
+            setError("Select text in your note to get suggestions.");
+            setStyleSuggestions([]);
+            setTextSuggestions([]);
+            setIsLoading(false); // Ensure loading is stopped
+        }
     }
-  }, [isOpen, selectedText]);
+  }, [isOpen, selectedText, fetchSuggestions]);
+
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -113,8 +115,12 @@ export function AISuggestionsPanel({
             )}
             
             {!isLoading && !error && styleSuggestions.length === 0 && textSuggestions.length === 0 && selectedText && (
-                 <p className="text-muted-foreground text-center py-10">No suggestions available for the selected text.</p>
+                 <p className="text-muted-foreground text-center py-10">No suggestions available for the selected text, or AI is thinking.</p>
             )}
+             {!isLoading && !error && !selectedText && (
+                 <p className="text-muted-foreground text-center py-10">Please select some text in your note to see suggestions.</p>
+            )}
+
 
             {!isLoading && !error && (styleSuggestions.length > 0 || textSuggestions.length > 0) && (
               <>
@@ -135,7 +141,7 @@ export function AISuggestionsPanel({
                               {s.fontFamily && <Badge variant="outline">Font: {s.fontFamily.split(',')[0]}</Badge>}
                               {s.fontSize && <Badge variant="outline">Size: {s.fontSize}</Badge>}
                               {s.fontWeight && <Badge variant="outline">Weight: {s.fontWeight}</Badge>}
-                              {s.color && <Badge variant="outline" style={{backgroundColor: s.color, color: '#fff'}}>Color</Badge>}
+                              {s.color && <Badge variant="outline" style={{backgroundColor: s.color, color: s.color && (parseInt(s.color.substring(1,3),16)*0.299 + parseInt(s.color.substring(3,5),16)*0.587 + parseInt(s.color.substring(5,7),16)*0.114) > 186 ? '#000' : '#fff' }}>Color</Badge>}
                             </div>
                             <Button onClick={() => onApplyStyleSuggestion(s)} size="sm" className="w-full mt-3">Apply Style</Button>
                           </CardContent>
@@ -150,7 +156,7 @@ export function AISuggestionsPanel({
                      <h3 className="text-xl font-semibold mb-3 font-headline flex items-center"><Lightbulb className="w-5 h-5 mr-2 text-primary" />Alternative Phrasing</h3>
                      <div className="space-y-3">
                         {textSuggestions.map((textSugg, index) => (
-                          <Card key={`text-${index}`} className="shadow-lg hover:shadow-xl transition-shadow">
+                          <Card key={`text-${Date.now()}-${index}`} className="shadow-lg hover:shadow-xl transition-shadow">
                             <CardContent className="p-4">
                               <p className="text-sm italic">"{textSugg}"</p>
                               <Button onClick={() => onApplyTextSuggestion(textSugg)} size="sm" className="w-full mt-3">Use This Text</Button>
@@ -172,4 +178,6 @@ export function AISuggestionsPanel({
       </DialogContent>
     </Dialog>
   );
-}
+});
+
+    

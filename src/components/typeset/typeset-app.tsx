@@ -1,13 +1,14 @@
+
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import type { Note, StyleValue, AiStyleSuggestion } from "@/types";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import type { Note, StyleValue } from "@/types";
 import { AppHeader } from "./app-header";
 import { NoteListSidebarContent } from "./note-list-sidebar-content";
 import { StylingToolbar } from "./styling-toolbar";
 import { NoteEditor } from "./note-editor";
 import { AISuggestionsPanel } from "./ai-suggestions-panel";
-import { Sidebar, SidebarProvider, SidebarInset, useSidebar } from "@/components/ui/sidebar";
+import { Sidebar, SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from "uuid"; // For generating unique IDs
 import type { SuggestStylesOutput } from "@/ai/flows/suggest-styles";
@@ -44,55 +45,92 @@ export function TypeSetApp() {
     fontFamily: "PT Sans, sans-serif",
     fontSize: "16px",
     fontWeight: "400",
-    color: "#000000",
+    color: "#000000", // This is a default, actual color application would be more complex
   });
   const [isAISuggestionsPanelOpen, setIsAISuggestionsPanelOpen] = useState(false);
   const [selectedTextForAI, setSelectedTextForAI] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
   const { toast } = useToast();
+  const debouncedSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Load notes from localStorage or use initialNotes
     const savedNotes = localStorage.getItem("typeset-notes");
     if (savedNotes) {
-      setNotes(JSON.parse(savedNotes));
+      try {
+        const parsedNotes = JSON.parse(savedNotes);
+        setNotes(parsedNotes);
+        if (parsedNotes.length > 0 && !activeNoteId) {
+           // setActiveNoteId(parsedNotes[0].id); // Optionally activate the first note
+        }
+      } catch (error) {
+        console.error("Failed to parse notes from localStorage", error);
+        setNotes(initialNotes);
+      }
     } else {
       setNotes(initialNotes);
     }
-  }, []);
+  }, []); // Removed activeNoteId from dependencies to prevent re-triggering
 
   useEffect(() => {
-    // Save notes to localStorage whenever they change
-    if (notes.length > 0) { // only save if notes array is not empty (avoid overwriting on initial empty load)
-        localStorage.setItem("typeset-notes", JSON.stringify(notes));
+    if (notes.length > 0) {
+        if (debouncedSaveTimeoutRef.current) {
+            clearTimeout(debouncedSaveTimeoutRef.current);
+        }
+        debouncedSaveTimeoutRef.current = setTimeout(() => {
+            localStorage.setItem("typeset-notes", JSON.stringify(notes));
+        }, 1500); // Debounce for 1.5 seconds
     }
+
+    return () => {
+        if (debouncedSaveTimeoutRef.current) {
+            clearTimeout(debouncedSaveTimeoutRef.current);
+        }
+    };
   }, [notes]);
 
-  const activeNote = notes.find(n => n.id === activeNoteId) || null;
+  const activeNote = useMemo(() => {
+    return notes.find(n => n.id === activeNoteId) || null;
+  }, [notes, activeNoteId]);
 
   useEffect(() => {
     if (activeNote) {
       setCurrentEditorTitle(activeNote.title);
       setCurrentEditorContent(activeNote.content);
     } else {
+      // If no active note (e.g., all notes deleted), clear editor fields
       setCurrentEditorTitle("");
       setCurrentEditorContent("");
     }
-  }, [activeNoteId, activeNote]);
+  }, [activeNote]); // Depend only on activeNote memoized value
+
+  const handleSaveNote = useCallback(() => {
+    if (!activeNoteId) return;
+    setNotes(prevNotes =>
+      prevNotes.map(note =>
+        note.id === activeNoteId
+          ? { ...note, title: currentEditorTitle, content: currentEditorContent, updatedAt: new Date().toISOString() }
+          : note
+      )
+    );
+    // Only toast if there was actually an active note being saved
+    if (activeNoteId) {
+        toast({ title: "Note Saved!", description: `"${currentEditorTitle || 'Untitled Note'}" has been updated.`});
+    }
+  }, [activeNoteId, currentEditorTitle, currentEditorContent, toast]);
   
   // Auto-save feature
   useEffect(() => {
-    if (!activeNoteId) return;
+    if (!activeNoteId || !activeNote) return; // Ensure activeNote is also available
 
     const handler = setTimeout(() => {
-      if (activeNote && (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content)) {
+      if (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content) {
         handleSaveNote();
       }
-    }, 1000); // Auto-save after 1 second of inactivity
+    }, 1000); 
 
     return () => clearTimeout(handler);
-  }, [currentEditorTitle, currentEditorContent, activeNoteId, notes]);
+  }, [currentEditorTitle, currentEditorContent, activeNoteId, activeNote, handleSaveNote]);
 
 
   const handleCreateNewNote = useCallback(() => {
@@ -111,56 +149,46 @@ export function TypeSetApp() {
 
   const handleSelectNote = useCallback((id: string) => {
     if(activeNoteId && activeNote && (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content)) {
-      handleSaveNote(); // Save current note before switching
+      handleSaveNote(); 
     }
     setActiveNoteId(id);
-  }, [activeNoteId, currentEditorTitle, currentEditorContent, notes]);
+  }, [activeNoteId, activeNote, currentEditorTitle, currentEditorContent, handleSaveNote]);
 
-  const handleSaveNote = useCallback(() => {
-    if (!activeNoteId) return;
-    setNotes(prevNotes =>
-      prevNotes.map(note =>
-        note.id === activeNoteId
-          ? { ...note, title: currentEditorTitle, content: currentEditorContent, updatedAt: new Date().toISOString() }
-          : note
-      )
-    );
-    toast({ title: "Note Saved!", description: `"${currentEditorTitle || 'Untitled Note'}" has been updated.`});
-  }, [activeNoteId, currentEditorTitle, currentEditorContent, toast]);
 
   const handleDeleteNote = useCallback((id: string) => {
     const noteToDelete = notes.find(n => n.id === id);
     setNotes(prevNotes => prevNotes.filter(note => note.id !== id));
+    
     if (activeNoteId === id) {
-      setActiveNoteId(notes.length > 1 ? notes.filter(n=>n.id !== id)[0]?.id || null : null);
+      const remainingNotes = notes.filter(n => n.id !== id);
+      setActiveNoteId(remainingNotes.length > 0 ? remainingNotes[0].id : null);
     }
-    toast({ title: "Note Deleted", description: `"${noteToDelete?.title || 'Untitled Note'}" has been removed.`, variant: "destructive" });
+    if (noteToDelete) {
+      toast({ title: "Note Deleted", description: `"${noteToDelete.title || 'Untitled Note'}" has been removed.`, variant: "destructive" });
+    }
   }, [activeNoteId, notes, toast]);
 
 
-  const handleStyleChange = (style: Partial<StyleValue>) => {
+  const handleStyleChange = useCallback((style: Partial<StyleValue>) => {
     setCurrentStyles(prev => ({ ...prev, ...style }));
-    // In a real rich text editor, this would apply to the selected text.
     toast({ title: "Style Changed (Conceptual)", description: "In a full app, this style would apply to selected text."});
-  };
+  }, [toast]);
 
-  const handleFormatAction = (action: string) => {
-    // Placeholder for rich text actions
+  const handleFormatAction = useCallback((action: string) => {
     toast({ title: `Format: ${action} (Conceptual)`, description: "This action would format selected text."});
-  };
+  }, [toast]);
 
-  const handleTriggerAISuggestions = () => {
+  const handleTriggerAISuggestions = useCallback(() => {
     if (!selectedTextForAI && activeNote) {
-      // If no text is selected, use a portion of the current note content.
       setSelectedTextForAI(activeNote.content.substring(0, 200) || "Sample text for AI suggestions.");
     } else if (!selectedTextForAI && !activeNote) {
       toast({ title: "Select a Note", description: "Please select or create a note first to get AI suggestions.", variant: "destructive" });
       return;
     }
     setIsAISuggestionsPanelOpen(true);
-  };
+  }, [selectedTextForAI, activeNote, toast]);
 
-  const handleApplyAISuggestion = (suggestion: SuggestStylesOutput) => {
+  const handleApplyAISuggestion = useCallback((suggestion: SuggestStylesOutput) => {
     setCurrentStyles(prev => ({
       ...prev,
       fontFamily: suggestion.fontFamily || prev.fontFamily,
@@ -170,23 +198,23 @@ export function TypeSetApp() {
     }));
     toast({ title: "AI Style Applied (Conceptual)", description: `Suggestion for "${suggestion.emphasis}" applied.`});
     setIsAISuggestionsPanelOpen(false);
-  };
+  }, [toast]);
   
-  const handleApplyAITextSuggestion = (suggestedText: string) => {
-     // This is a simplified application. A real editor might replace selected text or insert.
-     // For now, let's append it or replace if selectedTextForAI was the whole content.
+  const handleApplyAITextSuggestion = useCallback((suggestedText: string) => {
      if (selectedTextForAI === currentEditorContent) {
         setCurrentEditorContent(suggestedText);
      } else {
+        // If specific text was selected, it's harder to replace without a proper editor.
+        // Appending is a safe fallback for this conceptual implementation.
         setCurrentEditorContent(prev => `${prev}\n\nAI Suggested Text:\n${suggestedText}`);
      }
      toast({ title: "AI Text Suggestion Applied", description: "The suggested text has been added to your note."});
      setIsAISuggestionsPanelOpen(false);
-  };
+  }, [toast, selectedTextForAI, currentEditorContent]);
 
-  const handleExport = (format: "pdf" | "docx" | "md") => {
+  const handleExport = useCallback((format: "pdf" | "docx" | "md") => {
     toast({ title: `Exporting as ${format.toUpperCase()}... (Conceptual)`, description: "This feature would generate a file."});
-  };
+  }, [toast]);
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -205,7 +233,7 @@ export function TypeSetApp() {
             />
           </Sidebar>
           <SidebarInset className="flex flex-col overflow-hidden">
-            {activeNoteId && (
+            {activeNoteId && ( // Only show toolbar if a note is active
               <StylingToolbar
                 onStyleChange={handleStyleChange}
                 onFormatAction={handleFormatAction}
@@ -234,3 +262,5 @@ export function TypeSetApp() {
     </SidebarProvider>
   );
 }
+
+    

@@ -1,5 +1,7 @@
+
 "use client";
 
+import React, { useMemo } from "react";
 import type { Note } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +20,7 @@ interface NoteListSidebarContentProps {
   onSearchTermChange: (term: string) => void;
 }
 
-export function NoteListSidebarContent({
+export const NoteListSidebarContent = React.memo(function NoteListSidebarContent({
   notes,
   activeNoteId,
   onSelectNote,
@@ -28,10 +30,14 @@ export function NoteListSidebarContent({
   onSearchTermChange,
 }: NoteListSidebarContentProps) {
   
-  const filteredNotes = notes.filter(note => 
-    note.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    note.content.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredNotes = useMemo(() => {
+    if (!searchTerm) return notes;
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    return notes.filter(note => 
+      note.title.toLowerCase().includes(lowerSearchTerm) ||
+      note.content.toLowerCase().includes(lowerSearchTerm)
+    );
+  }, [notes, searchTerm]);
 
   return (
     <div className="flex flex-col h-full">
@@ -54,8 +60,11 @@ export function NoteListSidebarContent({
       
       <ScrollArea className="flex-grow">
         <div className="px-4 py-2 space-y-1">
-          {filteredNotes.length === 0 && (
-            <p className="text-sm text-muted-foreground p-2 text-center">No notes found.</p>
+          {filteredNotes.length === 0 && searchTerm && (
+            <p className="text-sm text-muted-foreground p-2 text-center">No notes match your search.</p>
+          )}
+           {filteredNotes.length === 0 && !searchTerm && (
+            <p className="text-sm text-muted-foreground p-2 text-center">No notes yet. Create one!</p>
           )}
           {filteredNotes.map((note) => (
             <Button
@@ -105,4 +114,6 @@ export function NoteListSidebarContent({
       </div>
     </div>
   );
-}
+});
+
+    

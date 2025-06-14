@@ -1,28 +1,28 @@
+
 "use client";
 
+import React, { useEffect, useRef } from "react";
 import type { Note } from "@/types";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useEffect, useRef } from "react";
 
 interface NoteEditorProps {
   note: Note | null;
   onTitleChange: (title: string) => void;
   onContentChange: (content: string) => void;
-  onSelectionChange?: (selectedText: string) => void; // For AI suggestions
+  onSelectionChange?: (selectedText: string) => void;
 }
 
-export function NoteEditor({ note, onTitleChange, onContentChange, onSelectionChange }: NoteEditorProps) {
+export const NoteEditor = React.memo(function NoteEditor({ note, onTitleChange, onContentChange, onSelectionChange }: NoteEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    // Auto-resize textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
-  }, [note?.content]);
+  }, [note?.content]); // Only re-run if content changes
 
   const handleTextSelection = () => {
     if (textareaRef.current && onSelectionChange) {
@@ -61,11 +61,15 @@ export function NoteEditor({ note, onTitleChange, onContentChange, onSelectionCh
           onChange={(e) => {
             onContentChange(e.target.value);
           }}
-          onSelect={handleTextSelection}
-          className="w-full min-h-[calc(100vh-20rem)] text-base md:text-lg leading-relaxed resize-none border-none shadow-none focus-visible:ring-0 p-0"
+          onSelect={handleTextSelection} // Changed from onMouseUp for more general selection handling
+          onMouseUp={handleTextSelection} // Keep for mouse-based selections
+          onKeyUp={handleTextSelection} // Add for keyboard-based selections
+          className="w-full min-h-[calc(100vh-22rem)] text-base md:text-lg leading-relaxed resize-none border-none shadow-none focus-visible:ring-0 p-0" // Adjusted min-height
           aria-label="Note Content"
         />
       </div>
     </ScrollArea>
   );
-}
+});
+
+    

@@ -1,5 +1,7 @@
+
 "use client";
 
+import React from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { FilePlus2, Settings } from "lucide-react";
@@ -8,7 +10,7 @@ interface AppHeaderProps {
   onNewNote: () => void;
 }
 
-export function AppHeader({ onNewNote }: AppHeaderProps) {
+export const AppHeader = React.memo(function AppHeader({ onNewNote }: AppHeaderProps) {
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 shadow-sm">
       <div className="flex items-center gap-2">
@@ -39,4 +41,6 @@ export function AppHeader({ onNewNote }: AppHeaderProps) {
       </div>
     </header>
   );
-}
+});
+
+    
