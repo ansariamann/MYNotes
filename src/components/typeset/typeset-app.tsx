@@ -59,12 +59,23 @@ export function TypeSetApp() {
       try {
         const parsedNotes = JSON.parse(savedNotes);
         setNotes(parsedNotes);
+        // If there are notes, select the first one by default, or the last active one if stored
+        if (parsedNotes.length > 0) {
+            // Potentially load last active note ID from localStorage too
+            setActiveNoteId(parsedNotes[0].id);
+        }
       } catch (error) {
         console.error("Failed to parse notes from localStorage", error);
         setNotes(initialNotes);
+        if (initialNotes.length > 0) {
+            setActiveNoteId(initialNotes[0].id);
+        }
       }
     } else {
       setNotes(initialNotes);
+       if (initialNotes.length > 0) {
+            setActiveNoteId(initialNotes[0].id);
+        }
     }
   }, []);
 
@@ -81,49 +92,67 @@ export function TypeSetApp() {
       setCurrentEditorTitle(activeNote.title);
       setCurrentEditorContent(activeNote.content);
     } else {
+      // Clear editor fields if no note is active
       setCurrentEditorTitle("");
       setCurrentEditorContent("");
     }
   }, [activeNote]);
 
+
   const handleSaveNote = useCallback(() => {
     if (!activeNoteId) return;
-    setNotes(prevNotes =>
-      prevNotes.map(note =>
-        note.id === activeNoteId
-          ? { ...note, title: currentEditorTitle, content: currentEditorContent, updatedAt: new Date().toISOString() }
-          : note
-      )
-    );
-    if (activeNoteId) { // Ensure toast only shows if a note was actually saved
+    // Check if there are actual changes before saving
+    const noteToSave = notes.find(n => n.id === activeNoteId);
+    if (noteToSave && (noteToSave.title !== currentEditorTitle || noteToSave.content !== currentEditorContent)) {
+        setNotes(prevNotes =>
+          prevNotes.map(note =>
+            note.id === activeNoteId
+              ? { ...note, title: currentEditorTitle, content: currentEditorContent, updatedAt: new Date().toISOString() }
+              : note
+          )
+        );
         toast({ title: "Note Saved!", description: `"${currentEditorTitle || 'Untitled Note'}" has been updated.`});
     }
-  }, [activeNoteId, currentEditorTitle, currentEditorContent, toast]);
+  }, [activeNoteId, currentEditorTitle, currentEditorContent, toast, notes]); // Added notes to dependency array for accurate check
   
   useEffect(() => {
     const handleBlur = () => {
+      // Save only if there's an active note and changes have been made
       if (activeNote && (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content)) {
         handleSaveNote();
       }
     };
 
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (activeNote && (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content)) {
         handleSaveNote();
+        // Standard way to prompt user, though browser behavior varies
+        // event.preventDefault();
+        // event.returnValue = ''; 
       }
     };
 
     window.addEventListener('blur', handleBlur);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
+    // Cleanup: remove event listeners
     return () => {
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Also, attempt to save one last time if component unmounts with changes
+      if (activeNote && (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content)) {
+        handleSaveNote();
+      }
     };
   }, [activeNote, currentEditorTitle, currentEditorContent, handleSaveNote]);
 
 
   const handleCreateNewNote = useCallback(() => {
+    // Save current note if it has changes before switching
+    if (activeNote && (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content)) {
+        handleSaveNote();
+    }
+
     const newNote: Note = {
       id: uuidv4(),
       title: "Untitled Note",
@@ -133,15 +162,18 @@ export function TypeSetApp() {
       updatedAt: new Date().toISOString(),
     };
     setNotes(prevNotes => [newNote, ...prevNotes]);
-    setActiveNoteId(newNote.id);
+    setActiveNoteId(newNote.id); // This will trigger the useEffect to update editor fields
     toast({ title: "New Note Created", description: "Switched to your new untitled note." });
-  }, [toast]);
+  }, [toast, activeNote, currentEditorTitle, currentEditorContent, handleSaveNote]);
 
   const handleSelectNote = useCallback((id: string) => {
-    if(activeNoteId && activeNote && (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content)) {
+    if (activeNoteId === id) return; // Do nothing if already active
+
+    // Save current note if it has changes before switching
+    if(activeNote && (currentEditorTitle !== activeNote.title || currentEditorContent !== activeNote.content)) {
       handleSaveNote(); 
     }
-    setActiveNoteId(id);
+    setActiveNoteId(id); // This will trigger the useEffect to update editor fields
   }, [activeNoteId, activeNote, currentEditorTitle, currentEditorContent, handleSaveNote]);
 
 
@@ -150,8 +182,13 @@ export function TypeSetApp() {
     setNotes(prevNotes => prevNotes.filter(note => note.id !== id));
     
     if (activeNoteId === id) {
-      const remainingNotes = notes.filter(n => n.id !== id); // notes here refers to the state before deletion
-      setActiveNoteId(remainingNotes.length > 0 ? (remainingNotes.find(n => n.id !==id) || remainingNotes[0]).id : null);
+      const remainingNotes = notes.filter(n => n.id !== id); 
+      const newActiveId = remainingNotes.length > 0 ? remainingNotes[0].id : null;
+      setActiveNoteId(newActiveId); // This will trigger the useEffect to update editor fields
+      if (!newActiveId) { // if no notes left
+        setCurrentEditorTitle("");
+        setCurrentEditorContent("");
+      }
     }
     if (noteToDelete) {
       toast({ title: "Note Deleted", description: `"${noteToDelete.title || 'Untitled Note'}" has been removed.`, variant: "destructive" });
@@ -191,14 +228,16 @@ export function TypeSetApp() {
   }, [toast]);
   
   const handleApplyAITextSuggestion = useCallback((suggestedText: string) => {
-     if (selectedTextForAI === currentEditorContent) {
-        setCurrentEditorContent(suggestedText);
-     } else {
-        setCurrentEditorContent(prev => `${prev}\n\nAI Suggested Text:\n${suggestedText}`);
+     if (selectedTextForAI && currentEditorContent.includes(selectedTextForAI)) {
+        setCurrentEditorContent(prev => prev.replace(selectedTextForAI, suggestedText));
+     } else { // If selected text not found (e.g. it was the whole content or changed) or no specific text selected
+        setCurrentEditorContent(suggestedText); // Replace whole content or append
      }
-     toast({ title: "AI Text Suggestion Applied", description: "The suggested text has been added to your note."});
+     toast({ title: "AI Text Suggestion Applied", description: "The suggested text has been updated in your note."});
      setIsAISuggestionsPanelOpen(false);
+     setSelectedTextForAI(""); // Clear selected text for AI
   }, [toast, selectedTextForAI, currentEditorContent]);
+
 
   const handleExport = useCallback((format: "pdf" | "docx" | "md") => {
     toast({ title: `Exporting as ${format.toUpperCase()}... (Conceptual)`, description: "This feature would generate a file."});
@@ -231,7 +270,9 @@ export function TypeSetApp() {
               />
             )}
             <NoteEditor
-              note={activeNote}
+              isNoteSelected={!!activeNote}
+              titleValue={currentEditorTitle}
+              contentValue={currentEditorContent}
               onTitleChange={setCurrentEditorTitle}
               onContentChange={setCurrentEditorContent}
               onSelectionChange={setSelectedTextForAI}
@@ -250,3 +291,4 @@ export function TypeSetApp() {
     </SidebarProvider>
   );
 }
+
